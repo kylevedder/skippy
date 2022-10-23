@@ -130,7 +130,7 @@ class Jlaunch3d(Runner):
         self.command = command
         self.heartbeat_freq_secs = heartbeat_freq_secs
 
-    def _start_job(self) -> Optional[str, str]:
+    def _start_job(self) -> Optional[Tuple[str, str]]:
         ret_code, stdout, stderr = _run_command(self.command)
         if ret_code != 0:
             return None
