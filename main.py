@@ -33,15 +33,17 @@ delete_both_block = PipelineBlock(
     failure_handler=Printer("Failed to delete files"),
 )
 
-delete_both_node = DAGNode("delete_both", delete_both_block)
+remove_existing_txt_node = DAGNode("remove_existing_txt", remove_existing_txt)
 create_file_node = DAGNode("create_file", create_file_block,
-                           [delete_both_node.id])
+                           [remove_existing_txt_node.id])
 create_other_file_node = DAGNode("create_other_file", create_other_file_block,
-                                 [delete_both_node.id])
-remove_existing_txt_node = DAGNode(
-    "remove_existing_txt", remove_existing_txt,
-    [create_file_node.id, create_other_file_node.id])
+                                 [remove_existing_txt_node.id])
+delete_both_node = DAGNode("delete_both", delete_both_block,
+                           [create_file_node.id, create_other_file_node.id])
 
-dag = DAG([remove_existing_txt_node, delete_both_node, create_file_node, create_other_file_node])
+dag = DAG([
+    remove_existing_txt_node, delete_both_node, create_file_node,
+    create_other_file_node
+])
 dag_success, failed_node = dag.run()
 print("Pipeline run result:", dag_success, "Failed node:", failed_node)

@@ -12,10 +12,10 @@ class DAGNode:
     def __init__(self,
                  id: str,
                  pipeline_block: PipelineBlock,
-                 child_ids: List[str] = []) -> None:
+                 parent_ids: List[str] = []) -> None:
         self.id = id
         self.pipeline_block = pipeline_block
-        self.child_ids = child_ids
+        self.parent_ids = parent_ids
 
     def run(self) -> bool:
         res = self.pipeline_block.run()
@@ -27,21 +27,18 @@ class DAGNode:
 
 class DAG:
 
-    def __init__(self, nodes: List[DAGNode]) -> None:
+    def __init__(self, nodes: List[DAGNode], num_workers: int = 10) -> None:
         self.nodes = nodes
+        self.num_workers = num_workers
+        assert self.num_workers > 0
         self.node_id_to_node_map: Dict[str, DAGNode] = {
             node.id: node
             for node in nodes
         }
-        self.node_id_to_child_ids_map: Dict[str, List[str]] = {
-            node.id: node.child_ids
+        self.node_id_to_parent_ids_map: Dict[str, List[str]] = {
+            node.id: node.parent_ids
             for node in nodes
         }
-        self.node_id_to_parent_ids_map: Dict[str,
-                                             List[str]] = defaultdict(list)
-        for node_id, children_ids in self.node_id_to_child_ids_map.items():
-            for child_id in children_ids:
-                self.node_id_to_parent_ids_map[child_id].append(node_id)
 
         self.node_id_to_node_state_map: Dict[str, Optional[bool]] = {
             k: None
@@ -50,8 +47,8 @@ class DAG:
 
         self._validate_graph_edges()
 
-        print("Full topo graph:")
-        print(self.node_id_to_child_ids_map)
+        print("Full dependency graph:")
+        print(self.node_id_to_parent_ids_map)
 
         self.topo_sorter = graphlib.TopologicalSorter(
             self.node_id_to_parent_ids_map)
@@ -77,13 +74,14 @@ class DAG:
 
     def _validate_graph_edges(self) -> None:
         for node in self.nodes:
-            for child_id in node.child_ids:
-                if child_id not in self.node_id_to_node_map:
+            for parent_id in node.parent_ids:
+                if parent_id not in self.node_id_to_node_map:
                     raise ValueError(
-                        f"Unknown child node {child_id} possessed by {node}")
+                        f"Unknown parent node {parent_id} possessed by {node}")
 
     def run(self) -> Tuple[bool, Optional[str]]:
-        with concurrent.futures.ThreadPoolExecutor(max_workers=5) as executor:
+        with concurrent.futures.ThreadPoolExecutor(
+                max_workers=self.num_workers) as executor:
             while self.topo_sorter.is_active():
                 print("Poll")
                 for node_id, state in self.node_id_to_node_state_map.items():
