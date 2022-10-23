@@ -126,12 +126,13 @@ class FoldersExist(Runner):
 
 class Jlaunch3d(Runner):
 
-    def __init__(self, command: str, heartbeat_freq_secs: int = 5) -> None:
+    def __init__(self, server_id:int,  command: str, heartbeat_freq_secs: int = 5) -> None:
+        self.server_id = server_id
         self.command = command
         self.heartbeat_freq_secs = heartbeat_freq_secs
 
     def _start_job(self) -> Optional[Tuple[str, str]]:
-        ret_code, stdout, stderr = _run_command(self.command)
+        ret_code, stdout, stderr = _run_command(f"jlaunch3d {self.server_id} '{self.command}'")
         if ret_code != 0:
             return None
 
