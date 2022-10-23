@@ -55,8 +55,6 @@ class DAG:
         self.topo_sorter.prepare()
 
     def async_run(self, node_id: str, verbose: bool = False) -> bool:
-        if verbose:
-            print(f"Async running node {node_id}")
         parent_ids = self.node_id_to_parent_ids_map[node_id]
         for parent_id in parent_ids:
             parent_state = self.node_id_to_node_state_map[parent_id]
@@ -65,6 +63,8 @@ class DAG:
                     f"Parent node {parent_id} of {node_id} is not yet run")
             if not parent_state:
                 return False
+        if verbose:
+            print(f"Async running node {node_id}")
         res = self.node_id_to_node_map[node_id].run()
         if verbose:
             print(f"Async ran node {node_id} with result {res}")

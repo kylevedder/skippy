@@ -9,7 +9,7 @@ class Runner:
         raise NotImplementedError
 
 
-class Shell(Runner):
+class LocalShell(Runner):
 
     def __init__(self, command: str, return_code_matcher=lambda x:
                  (x == 0)) -> None:
@@ -42,7 +42,6 @@ class Printer(Runner):
 
     def __repr__(self) -> str:
         return f"Printer(message={self.message})"
-
 
 class Not(Runner):
 
