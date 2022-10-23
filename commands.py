@@ -4,15 +4,18 @@ from pathlib import Path
 import time
 
 
-def _run_command(command: str) -> Tuple[int, str, str]:
+def _run_command(command: str, cwd: Path = Path()) -> Tuple[int, str, str]:
+    print(f"running command: {command}")
     process = subprocess.Popen(
         command,
+        cwd=cwd,
         shell=True,
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
         encoding="utf-8",
     )
     stdout, stderr = process.communicate()
+    print("command finished")
     return process.returncode, stdout, stderr
 
 
@@ -36,6 +39,19 @@ class LocalShell(Runner):
 
     def __repr__(self) -> str:
         return f"Shell(command={self.command})"
+
+
+class Force(Runner):
+
+    def __init__(self, command: Runner) -> None:
+        self.command = command
+
+    def run(self) -> Tuple[bool, str, str]:
+        _, stdout, stderr = self.command.run()
+        return (True), stdout, stderr
+
+    def __repr__(self) -> str:
+        return f"Force(command={self.command})"
 
 
 class Printer(Runner):
@@ -67,10 +83,13 @@ class Not(Runner):
 class FileExists(Runner):
 
     def __init__(self, filename: str) -> None:
-        self.filename = filename
+        self.filename = Path(filename)
 
     def run(self) -> Tuple[bool, str, str]:
-        return Path(self.filename).is_file(), "", ""
+        # There is something wrong with the exists() and is_file() methods.
+        exists = Path(str(self.filename)) in list(
+            self.filename.parent.glob('*'))
+        return exists, "", ""
 
     def __repr__(self) -> str:
         return f"FileExists(filename={self.filename})"
@@ -97,10 +116,12 @@ class FilesExist(Runner):
 class FolderExists(Runner):
 
     def __init__(self, foldername: str) -> None:
-        self.foldername = foldername
+        self.foldername = Path(foldername)
 
     def run(self) -> Tuple[bool, str, str]:
-        return Path(self.foldername).is_dir(), "", ""
+        exists = Path(str(self.foldername)) in list(
+            self.foldername.parent.glob('*'))
+        return exists, "", ""
 
     def __repr__(self) -> str:
         return f"FolderExists(foldername={self.foldername})"
@@ -124,21 +145,42 @@ class FoldersExist(Runner):
         return f"FoldersExist(pattern={self.pattern}, directory={self.directory})"
 
 
+class Rm(Runner):
+
+    def __init__(self, filename: str) -> None:
+        self.filename = filename
+
+    def run(self) -> Tuple[bool, str, str]:
+        if Path(self.filename).exists():
+            Path(self.filename).unlink()
+            return True, "", ""
+        else:
+            return False, "", ""
+
+    def __repr__(self) -> str:
+        return f"Rm(filename={self.filename})"
+
+
 class Jlaunch3d(Runner):
 
-    def __init__(self, server_id:int,  command: str, heartbeat_freq_secs: int = 5) -> None:
+    def __init__(self,
+                 server_id: int,
+                 command: str,
+                 heartbeat_freq_secs: int = 5) -> None:
         self.server_id = server_id
         self.command = command
         self.heartbeat_freq_secs = heartbeat_freq_secs
 
     def _start_job(self) -> Optional[Tuple[str, str]]:
-        ret_code, stdout, stderr = _run_command(f"jlaunch3d {self.server_id} '{self.command}'")
+        ret_code, stdout, stderr = _run_command(
+            f"cd /efs/code/partial_positives/; jlaunch3d {self.server_id} \"{self.command}\"",
+            cwd=Path("/efs/code/partial_positives/"))
         if ret_code != 0:
             return None
 
-        split_lines = stdout.split("\n")
+        split_lines = stdout.strip().split("\n")
 
-        ssh_target = split_lines[-1].strip()
+        ssh_target = split_lines[-2].strip()
         if not ssh_target.startswith("ssh target: "):
             return None
         ssh_target = ssh_target[len("ssh target: "):]
@@ -151,9 +193,9 @@ class Jlaunch3d(Runner):
 
     def _get_running_screens(self, t):
         cmd = f"ssh -o ConnectTimeout=1  {t} \"ls -1 /var/run/screen/S-ubuntu/\""
+        print(cmd)
         ret_code, stdout, stderr = _run_command(cmd)
-        if stderr.strip().startswith("ssh: connect to"):
-            return False, "", t
+        print("Heartbeat result", ret_code, stdout, stderr)
         return ret_code == 0, stdout, t
 
     def _send_heartbeat(self, screen_name, ssh_target) -> Optional[bool]:
@@ -171,12 +213,14 @@ class Jlaunch3d(Runner):
 
         screen_name, ssh_target = res
 
+        print("Sending heartbeat")
         heartbeat_result = self._send_heartbeat(screen_name, ssh_target)
         while heartbeat_result is not None:
             if heartbeat_result is False:
                 print("Job exited")
                 break
             time.sleep(self.heartbeat_freq_secs)
+            print("Sending heartbeat")
             heartbeat_result = self._send_heartbeat(screen_name, ssh_target)
 
         # Heartbeat failed

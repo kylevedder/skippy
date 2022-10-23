@@ -38,7 +38,7 @@ class PipelineBlock:
             success, stdout, stderr = postcondition.run()
             if not success:
                 if verbose:
-                    print(f"Postcondition {postcondition} failed")
+                    print(f"Postcondition {postcondition} failed with stdout: {stdout} and stderr: {stderr}")
                 return False, stdout, stderr
 
         return True, stdout, stderr

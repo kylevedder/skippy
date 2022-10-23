@@ -79,7 +79,8 @@ class DAG:
                     raise ValueError(
                         f"Unknown parent node {parent_id} possessed by {node}")
 
-    def run(self) -> Tuple[bool, Optional[str]]:
+    def _run_threaded(self,
+                      verbose: bool = False) -> Tuple[bool, Optional[str]]:
         with concurrent.futures.ThreadPoolExecutor(
                 max_workers=self.num_workers) as executor:
             while self.topo_sorter.is_active():
@@ -94,3 +95,23 @@ class DAG:
                 time.sleep(0.5)
 
         return all(self.node_id_to_node_state_map.values()), None
+
+    def _run_single(self, verbose: bool = False) -> Tuple[bool, Optional[str]]:
+        while self.topo_sorter.is_active():
+            print("Poll")
+            for node_id, state in self.node_id_to_node_state_map.items():
+                if state is False:
+                    return False, node_id
+
+            node_ids = self.topo_sorter.get_ready()
+            for node_id in node_ids:
+                self.async_run(node_id)
+            time.sleep(0.5)
+
+        return all(self.node_id_to_node_state_map.values()), None
+
+    def run(self) -> Tuple[bool, Optional[str]]:
+        if self.num_workers > 1:
+            return self._run_threaded()
+        else:
+            return self._run_single()
